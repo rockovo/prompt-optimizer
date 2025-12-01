@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Optimizer Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Prompt Optimizer Settings</h1>
+
+        <div class="section">
+            <h2>Anthropic API Key</h2>
+            <p class="info">
+                To use Claude for prompt optimization, you need an API key from Anthropic.
+                <a href="https://console.anthropic.com/" target="_blank">Get your API key here</a>.
+            </p>
+
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="password" id="apiKey" placeholder="sk-ant-api03-..." autocomplete="off">
+                <button id="toggleVisibility" class="icon-btn" title="Toggle visibility">👁️</button>
+            </div>
+
+            <div class="button-group">
+                <button id="saveBtn" class="primary-btn">Save API Key</button>
+                <button id="testBtn" class="secondary-btn">Test API Key</button>
+            </div>
+
+            <div id="message" class="message"></div>
+        </div>
+
+        <div class="section">
+            <h2>About</h2>
+            <p class="info">
+                This extension uses Claude Haiku 4.5 to help optimize your prompts.
+                Your API key is stored locally in your browser and never shared.
+            </p>
+        </div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Optimizer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Prompt Optimizer</h1>
+      <div class="header-buttons">
+        <button id="openDashboardBtn" class="icon-btn" title="Open Full View">🖥️</button>
+        <button id="settingsBtn" class="settings-btn" title="Settings">⚙️</button>
+      </div>
+    </div>
+
+    <div id="tokenCounter" class="token-counter">
+      <div class="token-label">Session:</div>
+      <div class="token-value"><span id="tokenCount">0</span> tokens</div>
+      <div class="cost-value">$<span id="costAmount">0.0000</span></div>
+    </div>
+
+    <textarea id="promptInput" placeholder="Enter your prompt here..." rows="6"></textarea>
+
+    <div class="button-group">
+      <button id="analyzeBtn" class="primary-btn">Analyze Prompt</button>
+      <button id="clearBtn" class="secondary-btn">Clear</button>
+    </div>
+
+    <div id="loadingIndicator" class="loading-indicator">
+      <div class="spinner"></div>
+      <span>Analyzing prompt...</span>
+    </div>
+
+    <div id="errorArea" class="error-area"></div>
+
+    <div id="resultsContainer" class="results-container">
+      <div id="summarySection" class="summary-section"></div>
+      <div id="questionsSection" class="questions-section"></div>
+      <button id="regenerateBtn" class="regenerate-btn">
+        🔄 Regenerate with Answers
+      </button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>

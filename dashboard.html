@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Optimizer - Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1>Prompt Optimizer</h1>
+            <div class="header-actions">
+                <button id="settingsBtn" class="settings-btn" title="Settings">⚙️</button>
+            </div>
+        </div>
+
+        <div id="tokenCounter" class="token-counter">
+            <div class="token-label">Session:</div>
+            <div class="token-value"><span id="tokenCount">0</span> tokens</div>
+            <div class="cost-value">$<span id="costAmount">0.0000</span></div>
+        </div>
+
+        <div class="main-content">
+            <!-- LEFT PANEL: Prompt Input -->
+            <div class="input-section">
+                <textarea id="promptInput" placeholder="Enter your prompt here..." rows="8"></textarea>
+
+                <div class="button-group">
+                    <button id="analyzeBtn" class="primary-btn">Analyze Prompt</button>
+                    <button id="clearBtn" class="secondary-btn">Clear</button>
+                </div>
+
+                <div id="loadingIndicator" class="loading-indicator">
+                    <div class="spinner"></div>
+                    <span>Analyzing prompt...</span>
+                </div>
+
+                <div id="errorArea" class="error-area"></div>
+            </div>
+
+            <!-- RIGHT PANEL: Analysis Results -->
+            <div id="resultsContainer" class="results-container">
+                <!-- Summary section with Quality & Risk badges -->
+                <div id="summarySection" class="summary-section"></div>
+
+                <!-- Tab navigation -->
+                <div id="tabNavigation" class="tab-navigation"></div>
+
+                <!-- Tab content area with accordion questions -->
+                <div id="tabContent" class="tab-content">
+                    <div class="empty-state">
+                        <p>No analysis yet. Enter a prompt and click "Analyze Prompt" to begin.</p>
+                    </div>
+                </div>
+
+                <!-- Regenerate button -->
+                <button id="regenerateBtn" class="regenerate-btn">
+                    🔄 Regenerate with Answers
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="modal-overlay">
+        <div class="modal-content">
+            <div id="modalHeader" class="modal-header"></div>
+            <div id="modalBody" class="modal-body"></div>
+            <div class="modal-buttons">
+                <button id="modalCancel" class="secondary-btn">Cancel</button>
+                <button id="modalConfirm" class="primary-btn">Proceed Anyway</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+
+</html>

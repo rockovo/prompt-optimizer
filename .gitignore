@@ -1,0 +1,12 @@
+# API keys and secrets
+*.env
+secrets.js
+
+# Backup and temp files
+*.backup
+*.corrupt
+*.tmp
+
+# OS files
+Thumbs.db
+.DS_Store
