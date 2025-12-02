@@ -66,8 +66,47 @@ label {
     min-width: 70px;
 }
 
-#apiKey {
+/* Select dropdown styling */
+select {
     flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+}
+
+select:focus {
+    outline: none;
+    border-color: #4A90E2;
+}
+
+option:disabled {
+    color: #999;
+}
+
+/* Model info text */
+.model-info {
+    margin: 8px 0 0 0;
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Input with icon wrapper */
+.input-with-icon {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex: 1;
+}
+
+.input-with-icon input {
+    flex: 1;
+}
+
+#apiKey {
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;

@@ -19,6 +19,13 @@ const regenerateBtn = document.getElementById('regenerateBtn');
 const tokenCount = document.getElementById('tokenCount');
 const costAmount = document.getElementById('costAmount');
 
+// Modal Elements
+const confirmationModal = document.getElementById('confirmationModal');
+const modalHeader = document.getElementById('modalHeader');
+const modalBody = document.getElementById('modalBody');
+const modalCancel = document.getElementById('modalCancel');
+const modalConfirm = document.getElementById('modalConfirm');
+
 // ===================================
 // STATE MANAGEMENT
 // ===================================
@@ -26,7 +33,8 @@ const costAmount = document.getElementById('costAmount');
 let apiKey = null;
 let currentPrompt = '';
 let currentAnalysis = null;
-let userAnswers = {}; // Map of question ID to answer text
+let userAnswers = {}; // Current round answers (keyed by question ID)
+let answerHistory = {}; // Accumulated answers across all rounds (keyed by question text)
 let currentTab = null; // Currently active category tab
 let expandedCards = {}; // Map of category -> Set of expanded question IDs
 
@@ -59,6 +67,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Restore saved answers BEFORE rendering
         if (result.savedAnswers) {
             userAnswers = result.savedAnswers;
+        }
+
+        // Restore answer history (accumulated across rounds)
+        if (result.savedAnswerHistory) {
+            answerHistory = result.savedAnswerHistory;
         }
 
         // Restore saved analysis
@@ -114,6 +127,7 @@ analyzeBtn.addEventListener('click', async () => {
     // Reset state for new analysis
     currentPrompt = prompt;
     userAnswers = {};
+    answerHistory = {}; // Clear accumulated history for fresh start
     expandedCards = {};
 
     await analyzePrompt(prompt);
@@ -129,14 +143,85 @@ regenerateBtn.addEventListener('click', async () => {
     // Collect all user answers from textareas
     const answerInputs = document.querySelectorAll('.answer-input');
     answerInputs.forEach(input => {
-        const questionId = input.dataset.questionId;
+        const questionId = parseInt(input.dataset.questionId, 10);
         const answer = input.value.trim();
-        if (answer) {
-            userAnswers[questionId] = answer;
+
+        // Find the question object to get the question text
+        const questionObj = currentAnalysis.questions.find(q => q.id === questionId);
+
+        if (answer && questionObj) {
+            // Store both question text and answer
+            userAnswers[questionId] = {
+                question: questionObj.question,
+                answer: answer
+            };
         }
     });
 
-    await analyzePrompt(currentPrompt, userAnswers);
+    // Check if user has answered ANY questions
+    const totalAnswers = Object.keys(userAnswers).filter(k => userAnswers[k]?.answer?.trim()).length;
+
+    if (totalAnswers === 0) {
+        // Block regeneration - no answers at all
+        showModal(
+            'No Answers Provided',
+            '<p>Please answer at least one question before regenerating the analysis.</p>',
+            () => { } // No action, just close
+        );
+        return;
+    }
+
+    // Check if there are unanswered questions
+    const totalQuestions = currentAnalysis.questions.length;
+    const unansweredCount = totalQuestions - totalAnswers;
+
+    if (unansweredCount > 0) {
+        // Build list of unanswered questions by category
+        const categories = getCategories(currentAnalysis.questions);
+        const unansweredByCategory = [];
+
+        categories.forEach(category => {
+            const categoryQuestions = getQuestionsByCategory(category);
+            const answeredInCategory = getAnsweredQuestionsInCategory(category);
+            const unansweredInCategory = categoryQuestions.length - answeredInCategory.length;
+
+            if (unansweredInCategory > 0) {
+                const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1);
+                unansweredByCategory.push(`<li><strong>${categoryLabel}:</strong> ${unansweredInCategory} unanswered</li>`);
+            }
+        });
+
+        // Show confirmation modal
+        showModal(
+            'Unanswered Questions',
+            `<p>You have <strong>${unansweredCount}</strong> unanswered question${unansweredCount > 1 ? 's' : ''}:</p>
+             <ul style="margin: 10px 0; padding-left: 20px;">${unansweredByCategory.join('')}</ul>
+             <p>Do you want to proceed anyway?</p>`,
+            async () => {
+                // Merge current answers into history before regenerating
+                Object.entries(userAnswers).forEach(([questionId, answerData]) => {
+                    if (answerData?.question && answerData?.answer) {
+                        answerHistory[answerData.question] = answerData.answer;
+                    }
+                });
+
+                // Send accumulated history to API
+                await analyzePrompt(currentPrompt, answerHistory);
+            }
+        );
+        return;
+    }
+
+    // All questions answered, proceed directly
+    // Merge current answers into history before regenerating
+    Object.entries(userAnswers).forEach(([questionId, answerData]) => {
+        if (answerData?.question && answerData?.answer) {
+            answerHistory[answerData.question] = answerData.answer;
+        }
+    });
+
+    // Send accumulated history to API
+    await analyzePrompt(currentPrompt, answerHistory);
 });
 
 // ===================================
@@ -175,19 +260,24 @@ async function analyzePrompt(prompt, previousAnswers = {}) {
             }
 
             // If there's an improved prompt, update the textarea
+            console.log('[Dashboard] Checking for improved prompt:', response.data.improvedPrompt);
             if (response.data.improvedPrompt) {
+                console.log('[Dashboard] Updating prompt input with improved prompt');
                 promptInput.value = response.data.improvedPrompt;
                 currentPrompt = response.data.improvedPrompt;
                 await browser.storage.local.set({ savedPrompt: response.data.improvedPrompt });
+            } else {
+                console.log('[Dashboard] No improved prompt in response (expected for first analysis)');
             }
 
-            // Clear old answers since API returns new questions with new IDs
+            // Clear current round answers (new questions need fresh input)
             userAnswers = {};
 
-            // Save the analysis to storage
+            // Save the analysis and preserve answer history
             await browser.storage.local.set({
                 savedAnalysis: response.data,
-                savedAnswers: {},
+                savedAnswers: {},  // Clear current round
+                savedAnswerHistory: answerHistory,  // PRESERVE accumulated history
                 savedQualityScore: response.data.qualityScore || null
             });
 
@@ -244,6 +334,50 @@ function getQuestionsByCategory(category) {
 }
 
 /**
+ * Get answered questions in a category
+ */
+function getAnsweredQuestionsInCategory(category) {
+    const categoryQuestions = getQuestionsByCategory(category);
+    return categoryQuestions.filter(q => userAnswers[q.id]?.answer?.trim());
+}
+
+/**
+ * Check if all questions in category are answered
+ */
+function isCategoryComplete(category) {
+    const categoryQuestions = getQuestionsByCategory(category);
+    const answeredQuestions = getAnsweredQuestionsInCategory(category);
+    return categoryQuestions.length > 0 &&
+        categoryQuestions.length === answeredQuestions.length;
+}
+
+/**
+ * Update badge color for a specific category
+ */
+function updateBadgeColor(category) {
+    const tabButton = document.querySelector(`.tab-button[data-category="${category}"]`);
+    if (!tabButton) return;
+
+    const badge = tabButton.querySelector('.count');
+    if (!badge) return;
+
+    badge.classList.remove('unanswered', 'answered');
+    if (isCategoryComplete(category)) {
+        badge.classList.add('answered');
+    } else {
+        badge.classList.add('unanswered');
+    }
+}
+
+/**
+ * Update all badge colors
+ */
+function updateAllBadgeColors() {
+    const categories = getCategories(currentAnalysis.questions || []);
+    categories.forEach(category => updateBadgeColor(category));
+}
+
+/**
  * Render tab navigation
  */
 function renderTabs(questions) {
@@ -266,7 +400,7 @@ function renderTabs(questions) {
         }
 
         const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1);
-        tabButton.innerHTML = `${categoryLabel} <span class="count">${count}</span>`;
+        tabButton.innerHTML = `${categoryLabel} <span class="count unanswered">${count}</span>`;
 
         tabButton.addEventListener('click', () => {
             if (count > 0) {
@@ -404,7 +538,7 @@ function createAccordionCard(question, category, autoExpand = false) {
     explanation.textContent = question.explanation;
     body.appendChild(explanation);
 
-    // Example (if provided)
+    // Example (if provided) - with clickable options
     if (question.example) {
         const exampleContainer = document.createElement('div');
         exampleContainer.className = 'question-example';
@@ -412,13 +546,72 @@ function createAccordionCard(question, category, autoExpand = false) {
         const exampleLabel = document.createElement('span');
         exampleLabel.className = 'example-label';
         exampleLabel.textContent = 'Example: ';
-
-        const exampleText = document.createElement('span');
-        exampleText.className = 'example-text';
-        exampleText.textContent = question.example;
-
         exampleContainer.appendChild(exampleLabel);
-        exampleContainer.appendChild(exampleText);
+
+        // FIX: Strip redundant "Example:" or "Examples:" prefix from API response
+        let cleanExample = question.example.replace(/^(Examples?|e\.?g\.?)[:\s]+/i, '').trim();
+
+        // Try to parse options from the example text
+        const parsed = parseExampleOptions(cleanExample);
+
+        // FIX: Display label if present (text before colon)
+        if (parsed.label) {
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'example-text';
+            labelSpan.textContent = parsed.label + ': ';
+            exampleContainer.appendChild(labelSpan);
+        }
+
+        if (parsed.options.length > 0) {
+            // Render as clickable options
+            const optionsContainer = document.createElement('div');
+            optionsContainer.className = 'example-options';
+
+            parsed.options.forEach(option => {
+                const optionElement = document.createElement('span');
+                optionElement.className = 'example-option';
+                optionElement.textContent = option;
+
+                // FIX: Make option clickable to APPEND to answer (multi-select)
+                optionElement.addEventListener('click', () => {
+                    const answerInput = document.querySelector(`.answer-input[data-question-id="${question.id}"]`);
+                    if (answerInput) {
+                        const currentValue = answerInput.value.trim();
+
+                        // Check if this option is already in the answer
+                        const currentOptions = currentValue ? splitByCommasRespectingParentheses(currentValue) : [];
+
+                        if (!currentOptions.includes(option)) {
+                            // Append with comma separator if not empty
+                            if (currentValue) {
+                                answerInput.value = currentValue + ', ' + option;
+                            } else {
+                                answerInput.value = option;
+                            }
+                            answerInput.dispatchEvent(new Event('input'));
+                        }
+
+                        // Toggle selected state
+                        if (optionElement.classList.contains('selected')) {
+                            optionElement.classList.remove('selected');
+                        } else {
+                            optionElement.classList.add('selected');
+                        }
+                    }
+                });
+
+                optionsContainer.appendChild(optionElement);
+            });
+
+            exampleContainer.appendChild(optionsContainer);
+        } else {
+            // Fallback: render as plain text
+            const exampleText = document.createElement('span');
+            exampleText.className = 'example-text';
+            exampleText.textContent = cleanExample;
+            exampleContainer.appendChild(exampleText);
+        }
+
         body.appendChild(exampleContainer);
     }
 
@@ -453,18 +646,32 @@ function createAccordionCard(question, category, autoExpand = false) {
     answerInput.dataset.questionId = question.id;
 
     // Pre-fill with existing answer if available (ANSWER PERSISTENCE)
-    if (userAnswers[question.id]) {
-        answerInput.value = userAnswers[question.id];
+    if (userAnswers[question.id]?.answer) {
+        answerInput.value = userAnswers[question.id].answer;
     }
 
     // Update userAnswers on input and save to storage
     answerInput.addEventListener('input', async (e) => {
-        const questionId = e.target.dataset.questionId;
+        // FIX: Parse questionId to number to match question.id type
+        const questionId = parseInt(e.target.dataset.questionId, 10);
         const answer = e.target.value.trim();
-        if (answer) {
-            userAnswers[questionId] = answer;
+
+        // Find the question object to get the question text
+        const questionObj = currentAnalysis.questions.find(q => q.id === questionId);
+
+        if (answer && questionObj) {
+            // Store both question text and answer
+            userAnswers[questionId] = {
+                question: questionObj.question,
+                answer: answer
+            };
         } else {
             delete userAnswers[questionId];
+        }
+
+        // Update badge color for this question's category
+        if (questionObj) {
+            updateBadgeColor((questionObj.category || 'general').toLowerCase());
         }
 
         // Save answers to storage
@@ -537,6 +744,43 @@ function toggleAccordion(card, category, questionId) {
 }
 
 // ===================================
+// MODAL MANAGEMENT
+// ===================================
+
+/**
+ * Show confirmation modal
+ */
+function showModal(header, body, onConfirm) {
+    modalHeader.textContent = header;
+    modalBody.innerHTML = body;
+    confirmationModal.classList.add('visible');
+
+    // Remove old listeners
+    const newCancelBtn = modalCancel.cloneNode(true);
+    const newConfirmBtn = modalConfirm.cloneNode(true);
+    modalCancel.replaceWith(newCancelBtn);
+    modalConfirm.replaceWith(newConfirmBtn);
+
+    // Update references
+    // Note: We don't update the global variables here to avoid confusion, 
+    // but we attach listeners to the new elements.
+
+    // Add new listeners
+    newCancelBtn.addEventListener('click', hideModal);
+    newConfirmBtn.addEventListener('click', () => {
+        hideModal();
+        onConfirm();
+    });
+}
+
+/**
+ * Hide confirmation modal
+ */
+function hideModal() {
+    confirmationModal.classList.remove('visible');
+}
+
+// ===================================
 // RENDERING
 // ===================================
 
@@ -580,6 +824,7 @@ function renderAnalysis() {
     // === RENDER TABS AND QUESTIONS ===
     if (currentAnalysis.questions && currentAnalysis.questions.length > 0) {
         renderTabs(currentAnalysis.questions);
+        updateAllBadgeColors(); // Update badge colors based on current answers
     } else {
         tabContent.innerHTML = '<div class="empty-state"><p>No clarifying questions at this time.</p></div>';
     }
@@ -592,6 +837,100 @@ function renderAnalysis() {
 // ===================================
 // UTILITY FUNCTIONS
 // ===================================
+
+/**
+ * Split text by commas, but ignore commas inside parentheses
+ * Example: "option1, option2 (e.g., example), option3" 
+ *       -> ["option1", "option2 (e.g., example)", "option3"]
+ */
+function splitByCommasRespectingParentheses(text) {
+    // Protect commas inside parentheses
+    let protected = text.replace(/\(([^)]+)\)/g, (match) => match.replace(/,/g, '{{COMMA}}'));
+    // Split on unprotected commas
+    let parts = protected.split(',').map(p => p.trim());
+    // Restore commas inside parentheses
+    return parts.map(p => p.replace(/\{\{COMMA\}\}/g, ','));
+}
+
+/**
+ * Parse example text to extract clickable options
+ * Handles patterns like: "e.g., 'option A', 'option B', or 'option C'"
+ * Also handles: "Do you prefer: option1, option2, option3"
+ * Returns: { label: string|null, options: string[] }
+ */
+function parseExampleOptions(exampleText) {
+    if (!exampleText || typeof exampleText !== 'string') return { label: null, options: [] };
+
+    let textToParse = exampleText;
+    let label = null;
+
+    // Check for colon-separated label (e.g., "Do you prefer: option1, option2")
+    const colonIndex = exampleText.indexOf(':');
+    if (colonIndex > 0 && colonIndex < exampleText.length - 1) {
+        const beforeColon = exampleText.substring(0, colonIndex).trim();
+        const afterColon = exampleText.substring(colonIndex + 1).trim();
+
+        // Skip label logic if beforeColon starts with question words (likely the actual question)
+        const questionWords = /^(is|are|does|do|what|how|where|when|why|which|can|could|would|should|will)\b/i;
+        const isQuestion = questionWords.test(beforeColon);
+
+        // If the part before colon looks like a question/label (short, ends with colon)
+        // and the part after has content, treat it as label + options
+        if (beforeColon.length < 80 && afterColon.length > 0 && !isQuestion) {
+            label = beforeColon;
+            textToParse = afterColon;
+        } else if (isQuestion && afterColon.length > 0) {
+            // Question detected in example field - just parse the part after colon
+            textToParse = afterColon;
+        }
+    }
+
+    // Pattern 1: Extract text within single quotes 'like this'
+    const singleQuoteMatches = textToParse.match(/'([^']+)'/g);
+    if (singleQuoteMatches && singleQuoteMatches.length > 1) {
+        return {
+            label: label,
+            options: singleQuoteMatches.map(match => match.slice(1, -1).trim())
+        };
+    }
+
+    // Pattern 2: Extract text within double quotes "like this"
+    const doubleQuoteMatches = textToParse.match(/"([^"]+)"/g);
+    if (doubleQuoteMatches && doubleQuoteMatches.length > 1) {
+        return {
+            label: label,
+            options: doubleQuoteMatches.map(match => match.slice(1, -1).trim())
+        };
+    }
+
+    // Pattern 3: Try comma-separated values
+    if (textToParse.includes(',')) {
+        // Remove common prefixes like "e.g.," "such as", etc.
+        const cleanText = textToParse
+            .replace(/^(e\.?g\.?|such as|like|for example|Examples?)[,:]?\s*/i, '')
+            .trim();
+
+        // Protect commas inside parentheses before splitting
+        let protected = cleanText.replace(/\(([^)]+)\)/g, (match) => match.replace(/,/g, '{{COMMA}}'));
+
+        // Split by commas and optional conjunctions, clean up each option
+        const parts = protected
+            .split(/,\s*(?:or\s+|and\s+)?|\s+or\s+|\s+and\s+/i)
+            .map(part => part.trim().replace(/\{\{COMMA\}\}/g, ','))
+            .filter(part => part.length > 0 && part.length < 100); // Reasonable length filter
+
+        // Only return if we got 2+ distinct short options
+        if (parts.length >= 2 && parts.every(p => p.length < 50)) {
+            return {
+                label: label,
+                options: parts
+            };
+        }
+    }
+
+    // No parseable options found
+    return { label: label, options: [] };
+}
 
 /**
  * Update token counter display

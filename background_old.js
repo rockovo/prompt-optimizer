@@ -6,33 +6,6 @@
 let sessionInputTokens = 0;
 let sessionOutputTokens = 0;
 
-// Provider configurations
-const PROVIDERS = {
-    anthropic: {
-        name: 'Anthropic',
-        baseUrl: 'https://api.anthropic.com/v1/messages',
-        defaultModel: 'claude-sonnet-4-5-20250929'
-    },
-    openai: {
-        name: 'OpenAI',
-        baseUrl: 'https://api.openai.com/v1/chat/completions',
-        defaultModel: 'gpt-4'
-    },
-    google: {
-        name: 'Google Gemini',
-        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
-        defaultModel: 'gemini-pro'
-    }
-};
-
-// Storage keys for settings
-const STORAGE_KEYS = {
-    PROVIDER: 'provider',
-    MODEL: 'model',
-    API_KEY: 'apiKey',
-    LEGACY_API_KEY: 'anthropicApiKey'
-};
-
 console.log('[Background Script] Loaded and ready');
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -56,9 +29,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'TEST_API_KEY') {
-        console.log('[Background Script] Testing API key with model:', message.model);
-        // Test the API key with the selected model
-        testAPIKey(message.apiKey, message.model)
+        console.log('[Background Script] Testing API key...');
+        // Test the API key
+        testAPIKey(message.apiKey)
             .then(result => {
                 console.log('[Background Script] API key test successful');
                 sendResponse({ success: true });
@@ -81,162 +54,19 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === 'GET_TOKEN_USAGE') {
         console.log('[Background Script] Getting token usage...');
-
-        // Load settings to get current model for cost calculation
-        loadProviderSettings()
-            .then(settings => {
-                const cost = calculateCost(settings.model, sessionInputTokens, sessionOutputTokens);
-                sendResponse({
-                    success: true,
-                    inputTokens: sessionInputTokens,
-                    outputTokens: sessionOutputTokens,
-                    totalTokens: sessionInputTokens + sessionOutputTokens,
-                    cost: cost
-                });
-            })
-            .catch(error => {
-                // Fallback to default model if settings load fails
-                const cost = calculateCost('claude-sonnet-4-5-20250929', sessionInputTokens, sessionOutputTokens);
-                sendResponse({
-                    success: true,
-                    inputTokens: sessionInputTokens,
-                    outputTokens: sessionOutputTokens,
-                    totalTokens: sessionInputTokens + sessionOutputTokens,
-                    cost: cost
-                });
-            });
-
+        const cost = calculateCost('claude-haiku-4-5-20251001', sessionInputTokens, sessionOutputTokens);
+        sendResponse({
+            success: true,
+            inputTokens: sessionInputTokens,
+            outputTokens: sessionOutputTokens,
+            totalTokens: sessionInputTokens + sessionOutputTokens,
+            cost: cost
+        });
         return true;
     }
 });
 
-// ===================================
-// PROVIDER ABSTRACTION LAYER
-// ===================================
-
-/**
- * Load provider settings from storage with fallbacks
- */
-async function loadProviderSettings() {
-    const result = await browser.storage.local.get([
-        STORAGE_KEYS.PROVIDER,
-        STORAGE_KEYS.MODEL,
-        STORAGE_KEYS.API_KEY,
-        STORAGE_KEYS.LEGACY_API_KEY
-    ]);
-
-    const provider = result[STORAGE_KEYS.PROVIDER] || 'anthropic';
-    const model = result[STORAGE_KEYS.MODEL] || PROVIDERS[provider].defaultModel;
-    const apiKey = result[STORAGE_KEYS.API_KEY] || result[STORAGE_KEYS.LEGACY_API_KEY];
-
-    if (!apiKey) {
-        throw new Error('No API key found. Please configure your API key in settings.');
-    }
-
-    console.log(`[Provider] Loaded settings - Provider: ${provider}, Model: ${model}`);
-    return { provider, model, apiKey };
-}
-
-/**
- * Route API call to the correct provider with unified error handling
- */
-async function callProvider(provider, model, apiKey, systemPrompt, userMessage) {
-    console.log(`[Provider] Routing to ${provider} with model ${model}`);
-
-    try {
-        switch (provider) {
-            case 'anthropic':
-                return await callAnthropic(model, apiKey, systemPrompt, userMessage);
-            case 'openai':
-                return await callOpenAI(model, apiKey, systemPrompt, userMessage);
-            case 'google':
-                return await callGoogle(model, apiKey, systemPrompt, userMessage);
-            default:
-                throw new Error(`Unknown provider: ${provider}`);
-        }
-    } catch (error) {
-        console.error(`[Provider] ${provider} error:`, error);
-
-        if (error.message.includes('coming soon')) {
-            throw error;
-        }
-
-        const friendlyMessage = error.status
-            ? `${PROVIDERS[provider].name} API error: ${error.message}`
-            : `Failed to connect to ${PROVIDERS[provider].name}: ${error.message}`;
-
-        const friendlyError = new Error(friendlyMessage);
-        friendlyError.status = error.status;
-        throw friendlyError;
-    }
-}
-
-/**
- * Call Anthropic API
- */
-async function callAnthropic(model, apiKey, systemPrompt, userMessage) {
-    const response = await fetch(PROVIDERS.anthropic.baseUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-            model: model,
-            max_tokens: 4096,
-            messages: [{
-                role: 'user',
-                content: userMessage
-            }]
-        })
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const error = new Error(getErrorMessage(response.status, errorData));
-        error.status = response.status;
-        throw error;
-    }
-
-    const data = await response.json();
-
-    return {
-        content: data.content && data.content.length > 0 ? data.content[0].text : null,
-        usage: {
-            inputTokens: data.usage?.input_tokens || 0,
-            outputTokens: data.usage?.output_tokens || 0
-        },
-        stopReason: data.stop_reason,
-        model: model,
-        raw: data
-    };
-}
-
-/**
- * Call OpenAI API (placeholder)
- */
-async function callOpenAI(model, apiKey, systemPrompt, userMessage) {
-    throw new Error('OpenAI support is coming soon. Please use Anthropic (Claude) for now.');
-}
-
-/**
- * Call Google Gemini API (placeholder)
- */
-async function callGoogle(model, apiKey, systemPrompt, userMessage) {
-    throw new Error('Google Gemini support is coming soon. Please use Anthropic (Claude) for now.');
-}
-
-// ===================================
-// MAIN ANALYSIS FUNCTION
-// ===================================
-
 async function analyzePrompt(apiKey, prompt, previousAnswers = {}) {
-    // Load provider settings
-    const settings = await loadProviderSettings();
-    console.log('[Background Script] Using provider:', settings.provider, 'with model:', settings.model);
-
     // Build the prompt with context if there are previous answers
     let fullPrompt = prompt;
     if (previousAnswers && Object.keys(previousAnswers).length > 0) {
@@ -337,31 +167,47 @@ Return JSON in this EXACT structure:
 
 IMPORTANT: Return ONLY valid JSON, no additional text.`;
 
-    const userMessage = `${systemPrompt}\n\nPrompt to analyze:\n${fullPrompt}`;
-    console.log('[Background Script] Full prompt sent to AI');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 2048,
+            messages: [{
+                role: 'user',
+                content: `${systemPrompt}\n\nPrompt to analyze:\n${fullPrompt}`
+            }]
+        })
+    });
 
-    // Call the appropriate provider
-    const providerResponse = await callProvider(
-        settings.provider,
-        settings.model,
-        settings.apiKey,
-        systemPrompt,
-        userMessage
-    );
-
-    // Update token usage from unified response
-    sessionInputTokens += providerResponse.usage.inputTokens;
-    sessionOutputTokens += providerResponse.usage.outputTokens;
-    console.log('[Background Script] Token usage - Input:', providerResponse.usage.inputTokens, 'Output:', providerResponse.usage.outputTokens);
-    console.log('[Background Script] Session totals - Input:', sessionInputTokens, 'Output:', sessionOutputTokens);
-
-    // Check if response was truncated
-    if (providerResponse.stopReason === 'max_tokens') {
-        console.warn('[Background Script] Response was truncated due to max_tokens limit');
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = new Error(getErrorMessage(response.status, errorData));
+        error.status = response.status;
+        throw error;
     }
 
-    if (providerResponse.content) {
-        let responseText = providerResponse.content;
+    const data = await response.json();
+
+    // Extract token usage from response
+    if (data.usage) {
+        const inputTokens = data.usage.input_tokens || 0;
+        const outputTokens = data.usage.output_tokens || 0;
+
+        sessionInputTokens += inputTokens;
+        sessionOutputTokens += outputTokens;
+
+        console.log('[Background Script] Token usage - Input:', inputTokens, 'Output:', outputTokens);
+        console.log('[Background Script] Session totals - Input:', sessionInputTokens, 'Output:', sessionOutputTokens);
+    }
+
+    if (data.content && data.content.length > 0) {
+        let responseText = data.content[0].text;
 
         // Claude sometimes wraps JSON in markdown code blocks, so extract it
         const jsonBlockMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
@@ -376,7 +222,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
 
             // Add token usage data to the response
             const totalTokens = sessionInputTokens + sessionOutputTokens;
-            const cost = calculateCost(providerResponse.model, sessionInputTokens, sessionOutputTokens);
+            const cost = calculateCost('claude-haiku-4-5-20251001', sessionInputTokens, sessionOutputTokens);
 
             return {
                 ...analysisData,
@@ -391,14 +237,14 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
             console.error('[Background Script] Failed to parse JSON:', responseText);
             console.error('[Background Script] Parse error details:', parseError.message);
             console.error('[Background Script] First 500 chars of response:', responseText.substring(0, 500));
-            throw new Error('Received invalid JSON from AI. Please try again.');
+            throw new Error('Received invalid JSON from Claude. Please try again.');
         }
     } else {
-        throw new Error('Received empty response from AI provider');
+        throw new Error('Received empty response from Claude');
     }
 }
 
-async function testAPIKey(apiKey, model = 'claude-sonnet-4-5-20250929') {
+async function testAPIKey(apiKey) {
     const trimmedKey = apiKey.trim();
 
     return new Promise((resolve, reject) => {
@@ -432,7 +278,7 @@ async function testAPIKey(apiKey, model = 'claude-sonnet-4-5-20250929') {
         };
 
         xhr.send(JSON.stringify({
-            model: model,
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 10,
             messages: [{ role: 'user', content: 'Hi' }]
         }));
@@ -442,12 +288,11 @@ async function testAPIKey(apiKey, model = 'claude-sonnet-4-5-20250929') {
 function calculateCost(model, inputTokens, outputTokens) {
     const rates = {
         'claude-haiku-4-5-20251001': { input: 1, output: 5 },
-        'claude-sonnet-4-5-20250929': { input: 3, output: 15 },
         'claude-sonnet-4-5-20251001': { input: 3, output: 15 },
         'claude-opus-4-5-20251001': { input: 15, output: 75 }
     };
 
-    const rate = rates[model] || rates['claude-sonnet-4-5-20250929'];
+    const rate = rates[model] || rates['claude-haiku-4-5-20251001'];
 
     const inputCost = (inputTokens / 1_000_000) * rate.input;
     const outputCost = (outputTokens / 1_000_000) * rate.output;
