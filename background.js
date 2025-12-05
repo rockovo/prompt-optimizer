@@ -233,10 +233,6 @@ async function callGoogle(model, apiKey, systemPrompt, userMessage) {
 // ===================================
 
 async function analyzePrompt(apiKey, prompt, previousAnswers = {}) {
-    console.log('[Background Script] previousAnswers received:', previousAnswers);
-    console.log('[Background Script] previousAnswers type:', typeof previousAnswers);
-    console.log('[Background Script] previousAnswers keys:', Object.keys(previousAnswers || {}));
-
     // Load provider settings
     const settings = await loadProviderSettings();
     console.log('[Background Script] Using provider:', settings.provider, 'with model:', settings.model);
@@ -399,11 +395,6 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
             }
 
             // Generate improved prompt in JavaScript if we have previous answers
-            console.log('[Background Script] Checking previousAnswers:', {
-                exists: !!previousAnswers,
-                keyCount: previousAnswers ? Object.keys(previousAnswers).length : 0
-            });
-
             if (previousAnswers && Object.keys(previousAnswers).length > 0) {
                 const answers = Object.entries(previousAnswers)
                     .filter(([question, answerData]) => {
@@ -417,10 +408,6 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         category: typeof answerData === 'object' ? (answerData.category || 'general') : 'general'
                     }));
 
-                console.log('[Background Script] Filtered answers count:', answers.length);
-                console.log('[Background Script] Filtered answers:', answers);
-                console.log('[Background Script] About to check answers.length > 0:', answers.length);
-
                 if (answers.length > 0) {
                     // Categorize answers using Sonnet's category tags
                     let purpose = null, audience = null;
@@ -431,12 +418,6 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         const q = a.question;
                         const ans = a.answer;
                         const category = a.category ? a.category.toLowerCase() : 'general';
-
-                        console.log('[Categorization] Processing answer:', {
-                            question: q,
-                            answer: ans,
-                            category: category
-                        });
 
                         // Check for PURPOSE first (regardless of category)
                         if (q.includes('type') || q.includes('kind') || q.includes('purpose') || q.includes('goal') || q.includes('what are you building')) {
