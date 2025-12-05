@@ -390,6 +390,28 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     const features = [], data = [], auth = [], integrations = [];
                     const timeline = [], budget = [], techStack = [], deliverable = [], exclusions = [];
 
+                    // Process and filter answers to exclude unhelpful responses
+                    function processAnswer(answer) {
+                        if (!answer || typeof answer !== 'string') return null;
+
+                        const trimmed = answer.trim();
+                        const lower = trimmed.toLowerCase();
+
+                        // Skip non-informative answers
+                        if (['no', 'n/a', 'none', 'not applicable', 'no preference', 'not sure'].includes(lower)) {
+                            return null;
+                        }
+
+                        // Transform "Yes for X" or "Yes, X" patterns
+                        if (lower.startsWith('yes')) {
+                            // Remove "yes" and common separators, keep the meaningful part
+                            const detail = trimmed.replace(/^yes[,\s]*(for|but|and|with|to)?\s*/i, '').trim();
+                            return detail || null;
+                        }
+
+                        return trimmed;
+                    }
+
                     answers.forEach(a => {
                         const q = a.question;
                         const ans = a.answer;
@@ -407,42 +429,55 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         else if (category === 'scope') {
                             // Check for specific subcategories
                             if (q.includes('data') || q.includes('storage') || q.includes('database') || q.includes('store')) {
-                                data.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) data.push(processed);
                             } else if (q.includes('authentication') || q.includes('login') || q.includes('user account') || q.includes('sign up')) {
-                                auth.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) auth.push(processed);
                             } else if (q.includes('integration') || q.includes('connect') || q.includes('api') || q.includes('third-party')) {
-                                integrations.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) integrations.push(processed);
                             } else if (q.includes('deliverable') || q.includes('output') || q.includes('receive') || q.includes('end result')) {
-                                deliverable.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) deliverable.push(processed);
                             } else if (q.includes('exclude') || q.includes('out of scope') || q.includes('not include') || q.includes('skip')) {
-                                exclusions.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) exclusions.push(processed);
                             } else {
                                 // Default scope questions to features
-                                features.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) features.push(processed);
                             }
                         }
                         // CONTEXT category → Constraints & Technical Context
                         else if (category === 'context') {
                             if (q.includes('timeline') || q.includes('deadline') || q.includes('when') || q.includes('how long')) {
-                                timeline.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) timeline.push(processed);
                             } else if (q.includes('budget') || q.includes('cost') || q.includes('price') || q.includes('spend')) {
-                                budget.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) budget.push(processed);
                             } else if (q.includes('technology') || q.includes('framework') || q.includes('language') || q.includes('stack') || q.includes('built with') || q.includes('skill level') || q.includes('experience') || q.includes('who is building')) {
-                                techStack.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) techStack.push(processed);
                             } else {
                                 // Other context questions go to constraints
-                                budget.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) budget.push(processed);
                             }
                         }
                         // SAFETY, COMPLETENESS, CLARITY, or GENERAL → Use keyword fallback
                         else {
                             if (q.includes('deliverable') || q.includes('output') || q.includes('receive') || q.includes('end result')) {
-                                deliverable.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) deliverable.push(processed);
                             } else if (q.includes('exclude') || q.includes('out of scope') || q.includes('not include') || q.includes('skip')) {
-                                exclusions.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) exclusions.push(processed);
                             } else {
                                 // Default to features
-                                features.push(ans);
+                                const processed = processAnswer(ans);
+                                if (processed) features.push(processed);
                             }
                         }
                     });
