@@ -16,6 +16,7 @@ const summarySection = document.getElementById('summarySection');
 const tabNavigation = document.getElementById('tabNavigation');
 const tabContent = document.getElementById('tabContent');
 const regenerateBtn = document.getElementById('regenerateBtn');
+const generateFinalBtn = document.getElementById('generateFinalBtn');
 const tokenCount = document.getElementById('tokenCount');
 const costAmount = document.getElementById('costAmount');
 
@@ -159,6 +160,9 @@ regenerateBtn.addEventListener('click', async () => {
         }
     });
 
+    // Update Generate Final button visibility
+    updateGenerateFinalButtonVisibility();
+
     // Check if user has answered ANY questions
     const totalAnswers = Object.keys(userAnswers).filter(k => userAnswers[k]?.answer?.trim()).length;
 
@@ -230,6 +234,23 @@ regenerateBtn.addEventListener('click', async () => {
     // Send accumulated history to API
     await analyzePrompt(currentPrompt, answerHistory);
 });
+
+// Generate Final Prompt button click handler
+generateFinalBtn.addEventListener('click', async () => {
+    console.log('Generate final prompt clicked');
+    // TODO: Implement final prompt generation logic
+});
+
+// Update Generate Final button visibility based on answers
+function updateGenerateFinalButtonVisibility() {
+    const hasAnswers = Object.keys(answerHistory).length > 0 || Object.keys(userAnswers).length > 0;
+
+    if (hasAnswers) {
+        generateFinalBtn.style.display = 'flex';
+    } else {
+        generateFinalBtn.style.display = 'none';
+    }
+}
 
 // ===================================
 // MAIN ANALYSIS FUNCTION
@@ -681,6 +702,9 @@ function createAccordionCard(question, category, autoExpand = false) {
             updateBadgeColor((questionObj.category || 'general').toLowerCase());
         }
 
+        // Update Generate Final button visibility
+        updateGenerateFinalButtonVisibility();
+
         // Save answers to storage
         try {
             await browser.storage.local.set({ savedAnswers: userAnswers });
@@ -832,6 +856,7 @@ function renderAnalysis() {
     if (currentAnalysis.questions && currentAnalysis.questions.length > 0) {
         renderTabs(currentAnalysis.questions);
         updateAllBadgeColors(); // Update badge colors based on current answers
+        updateGenerateFinalButtonVisibility(); // Update generate final button visibility
     } else {
         tabContent.innerHTML = '<div class="empty-state"><p>No clarifying questions at this time.</p></div>';
     }
@@ -966,8 +991,10 @@ async function handleClear() {
     currentPrompt = '';
     currentAnalysis = null;
     userAnswers = {};
+    answerHistory = {};
     currentTab = null;
     expandedCards = {};
+    updateGenerateFinalButtonVisibility(); // Hide generate final button after clearing
     errorArea.classList.remove('visible');
     resultsContainer.classList.remove('visible');
     regenerateBtn.classList.remove('visible');

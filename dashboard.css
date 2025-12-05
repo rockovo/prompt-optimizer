@@ -745,6 +745,7 @@ h1 {
     transform: none;
     box-shadow: none;
 }
+
 /* ===================================
    BADGE COLOR VARIANTS (Answer Tracking)
    =================================== */
@@ -809,6 +810,7 @@ h1 {
         opacity: 0;
         transform: translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
