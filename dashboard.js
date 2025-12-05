@@ -150,10 +150,11 @@ regenerateBtn.addEventListener('click', async () => {
         const questionObj = currentAnalysis.questions.find(q => q.id === questionId);
 
         if (answer && questionObj) {
-            // Store both question text and answer
+            // Store question text, answer, and category
             userAnswers[questionId] = {
                 question: questionObj.question,
-                answer: answer
+                answer: answer,
+                category: questionObj.category || 'general'
             };
         }
     });
@@ -201,7 +202,10 @@ regenerateBtn.addEventListener('click', async () => {
                 // Merge current answers into history before regenerating
                 Object.entries(userAnswers).forEach(([questionId, answerData]) => {
                     if (answerData?.question && answerData?.answer) {
-                        answerHistory[answerData.question] = answerData.answer;
+                        answerHistory[answerData.question] = {
+                            answer: answerData.answer,
+                            category: answerData.category || 'general'
+                        };
                     }
                 });
 
@@ -216,7 +220,10 @@ regenerateBtn.addEventListener('click', async () => {
     // Merge current answers into history before regenerating
     Object.entries(userAnswers).forEach(([questionId, answerData]) => {
         if (answerData?.question && answerData?.answer) {
-            answerHistory[answerData.question] = answerData.answer;
+            answerHistory[answerData.question] = {
+                answer: answerData.answer,
+                category: answerData.category || 'general'
+            };
         }
     });
 

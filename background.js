@@ -233,6 +233,10 @@ async function callGoogle(model, apiKey, systemPrompt, userMessage) {
 // ===================================
 
 async function analyzePrompt(apiKey, prompt, previousAnswers = {}) {
+    console.log('[Background Script] previousAnswers received:', previousAnswers);
+    console.log('[Background Script] previousAnswers type:', typeof previousAnswers);
+    console.log('[Background Script] previousAnswers keys:', Object.keys(previousAnswers || {}));
+
     // Load provider settings
     const settings = await loadProviderSettings();
     console.log('[Background Script] Using provider:', settings.provider, 'with model:', settings.model);
@@ -241,9 +245,16 @@ async function analyzePrompt(apiKey, prompt, previousAnswers = {}) {
     let fullPrompt = prompt;
     if (previousAnswers && Object.keys(previousAnswers).length > 0) {
         const answersText = Object.entries(previousAnswers)
-            .filter(([_, answer]) => answer && answer.trim())
-            .map(([id, answer]) => `Q${id}: ${answer}`)
-            .join('\n');
+            .filter(([_, answerData]) => {
+                // Support both old format (string) and new format (object with answer/category)
+                const answer = typeof answerData === 'string' ? answerData : answerData?.answer;
+                return answer && answer.trim();
+            })
+            .map(([question, answerData]) => {
+                const answer = typeof answerData === 'string' ? answerData : answerData.answer;
+                return `Q: ${question}\nA: ${answer}`;
+            })
+            .join('\n\n');
 
         if (answersText) {
             fullPrompt = `Original prompt:\n${prompt}\n\nContext from previous questions:\n${answersText}`;
@@ -377,6 +388,217 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
         // Try to parse JSON response
         try {
             const analysisData = JSON.parse(responseText);
+
+            /**
+             * Split text by commas, but ignore commas inside parentheses
+             */
+            function splitByCommasRespectingParentheses(text) {
+                let protected = text.replace(/\(([^)]+)\)/g, (match) => match.replace(/,/g, '{{COMMA}}'));
+                let parts = protected.split(',').map(p => p.trim());
+                return parts.map(p => p.replace(/\{\{COMMA\}\}/g, ','));
+            }
+
+            // Generate improved prompt in JavaScript if we have previous answers
+            console.log('[Background Script] Checking previousAnswers:', {
+                exists: !!previousAnswers,
+                keyCount: previousAnswers ? Object.keys(previousAnswers).length : 0
+            });
+
+            if (previousAnswers && Object.keys(previousAnswers).length > 0) {
+                const answers = Object.entries(previousAnswers)
+                    .filter(([question, answerData]) => {
+                        // Support both old format (string) and new format (object with answer/category)
+                        const answer = typeof answerData === 'string' ? answerData : answerData?.answer;
+                        return answer && answer.trim();
+                    })
+                    .map(([question, answerData]) => ({
+                        question: question.toLowerCase(),
+                        answer: typeof answerData === 'string' ? answerData : answerData.answer,
+                        category: typeof answerData === 'object' ? (answerData.category || 'general') : 'general'
+                    }));
+
+                console.log('[Background Script] Filtered answers count:', answers.length);
+                console.log('[Background Script] Filtered answers:', answers);
+                console.log('[Background Script] About to check answers.length > 0:', answers.length);
+
+                if (answers.length > 0) {
+                    // Categorize answers using Sonnet's category tags
+                    let purpose = null, audience = null;
+                    const features = [], data = [], auth = [], integrations = [];
+                    const timeline = [], budget = [], techStack = [], deliverable = [], exclusions = [];
+
+                    answers.forEach(a => {
+                        const q = a.question;
+                        const ans = a.answer;
+                        const category = a.category ? a.category.toLowerCase() : 'general';
+
+                        console.log('[Categorization] Processing answer:', {
+                            question: q,
+                            answer: ans,
+                            category: category
+                        });
+
+                        // Check for PURPOSE first (regardless of category)
+                        if (q.includes('type') || q.includes('kind') || q.includes('purpose') || q.includes('goal') || q.includes('what are you building')) {
+                            if (!purpose) purpose = ans;
+                        }
+                        // Check for AUDIENCE second (regardless of category)
+                        else if (q.includes('audience') || q.includes('who') || q.includes('users') || q.includes('target') || q.includes('customers') || q.includes('clients')) {
+                            if (!audience) audience = ans;
+                        }
+                        // SCOPE category → Requirements (features, integrations, technical details)
+                        else if (category === 'scope') {
+                            // Check for specific subcategories
+                            if (q.includes('data') || q.includes('storage') || q.includes('database') || q.includes('store')) {
+                                data.push(ans);
+                            } else if (q.includes('authentication') || q.includes('login') || q.includes('user account') || q.includes('sign up')) {
+                                auth.push(ans);
+                            } else if (q.includes('integration') || q.includes('connect') || q.includes('api') || q.includes('third-party')) {
+                                integrations.push(ans);
+                            } else if (q.includes('deliverable') || q.includes('output') || q.includes('receive') || q.includes('end result')) {
+                                deliverable.push(ans);
+                            } else if (q.includes('exclude') || q.includes('out of scope') || q.includes('not include') || q.includes('skip')) {
+                                exclusions.push(ans);
+                            } else {
+                                // Default scope questions to features
+                                features.push(ans);
+                            }
+                        }
+                        // CONTEXT category → Constraints & Technical Context
+                        else if (category === 'context') {
+                            if (q.includes('timeline') || q.includes('deadline') || q.includes('when') || q.includes('how long')) {
+                                timeline.push(ans);
+                            } else if (q.includes('budget') || q.includes('cost') || q.includes('price') || q.includes('spend')) {
+                                budget.push(ans);
+                            } else if (q.includes('technology') || q.includes('framework') || q.includes('language') || q.includes('stack') || q.includes('built with') || q.includes('skill level') || q.includes('experience') || q.includes('who is building')) {
+                                techStack.push(ans);
+                            } else {
+                                // Other context questions go to constraints
+                                budget.push(ans);
+                            }
+                        }
+                        // SAFETY, COMPLETENESS, CLARITY, or GENERAL → Use keyword fallback
+                        else {
+                            if (q.includes('deliverable') || q.includes('output') || q.includes('receive') || q.includes('end result')) {
+                                deliverable.push(ans);
+                            } else if (q.includes('exclude') || q.includes('out of scope') || q.includes('not include') || q.includes('skip')) {
+                                exclusions.push(ans);
+                            } else {
+                                // Default to features
+                                features.push(ans);
+                            }
+                        }
+                    });
+
+                    // Build natural opening sentence
+                    let opening = '';
+                    if (purpose) {
+                        opening = `Build a ${purpose}`;
+                        if (audience) {
+                            opening += ` for ${audience}`;
+                        }
+                        opening += '.';
+                    } else {
+                        // Use first sentence from original prompt as fallback
+                        if (prompt && prompt.trim()) {
+                            const firstSentence = prompt.split('.')[0];
+                            opening = firstSentence + '.';
+                        } else {
+                            opening = 'Implement the following requirements:';
+                        }
+                    }
+
+                    // Build XML-wrapped sections
+                    const xmlSections = [];
+
+                    // Add context (always included)
+                    xmlSections.push('<context>');
+                    let contextText = '';
+                    if (purpose && audience) {
+                        contextText = `Building a ${purpose} for ${audience}.`;
+                    } else if (purpose) {
+                        contextText = `Building a ${purpose}.`;
+                    } else if (audience) {
+                        contextText = `Developing a solution for ${audience}.`;
+                    } else if (prompt && prompt.trim()) {
+                        // Use original prompt as context fallback
+                        contextText = prompt;
+                    } else {
+                        contextText = 'Building a custom solution based on the specified requirements.';
+                    }
+                    xmlSections.push(contextText);
+                    xmlSections.push('</context>');
+                    xmlSections.push('');
+
+                    // Add task (always included)
+                    xmlSections.push('<task>');
+                    xmlSections.push(opening);
+                    xmlSections.push('</task>');
+                    xmlSections.push('');
+
+                    // Add requirements section (only if content exists)
+                    const requirements = [...features, ...integrations, ...auth, ...data];
+                    if (requirements.length > 0) {
+                        xmlSections.push('<requirements>');
+                        requirements.forEach(req => {
+                            const items = req.includes(',')
+                                ? splitByCommasRespectingParentheses(req)
+                                : [req];
+                            items.forEach(item => xmlSections.push('- ' + item));
+                        });
+                        xmlSections.push('</requirements>');
+                        xmlSections.push('');
+                    }
+
+                    // Add constraints section (only if content exists)
+                    const constraints = [...timeline, ...budget];
+                    if (constraints.length > 0) {
+                        xmlSections.push('<constraints>');
+                        if (timeline.length > 0) {
+                            xmlSections.push('- Timeline: ' + timeline.join(', '));
+                        }
+                        if (budget.length > 0) {
+                            xmlSections.push('- Budget: ' + budget.join(', '));
+                        }
+                        xmlSections.push('</constraints>');
+                        xmlSections.push('');
+                    }
+
+                    // Add technical context (if any) - keep as plain text for now
+                    if (techStack.length > 0) {
+                        xmlSections.push('Technical Context:');
+                        techStack.forEach(tech => xmlSections.push('- ' + tech));
+                        xmlSections.push('');
+                    }
+
+                    // Add output specification (always included)
+                    xmlSections.push('<output_specification>');
+                    if (deliverable.length > 0) {
+                        deliverable.forEach(del => xmlSections.push('- ' + del));
+                    } else {
+                        xmlSections.push('- Working application with setup instructions');
+                        xmlSections.push('- README with deployment guide');
+                    }
+                    xmlSections.push('</output_specification>');
+
+                    // Add scope boundaries (only if content exists)
+                    if (exclusions.length > 0) {
+                        xmlSections.push('');
+                        xmlSections.push('<scope_boundaries>');
+                        exclusions.forEach(exc => {
+                            const items = exc.includes(',')
+                                ? splitByCommasRespectingParentheses(exc)
+                                : [exc];
+                            items.forEach(item => xmlSections.push('- ' + item));
+                        });
+                        xmlSections.push('</scope_boundaries>');
+                    }
+
+                    // Override Sonnet's improvedPrompt
+                    analysisData.improvedPrompt = xmlSections.join('\n');
+                    console.log('[Background Script] Generated improved prompt from', answers.length, 'answers');
+                }
+            }
 
             // Add token usage data to the response
             const totalTokens = sessionInputTokens + sessionOutputTokens;
