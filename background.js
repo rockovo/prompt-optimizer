@@ -422,7 +422,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                             if (!purpose) purpose = ans;
                         }
                         // Check for AUDIENCE second (regardless of category)
-                        else if (q.includes('audience') || q.includes('who') || q.includes('users') || q.includes('target') || q.includes('customers') || q.includes('clients')) {
+                        else if (q.includes('audience') || q.includes('who will use') || q.includes('who are the users') || q.includes('who is the target') || q.includes('users') || q.includes('target audience') || q.includes('customers') || q.includes('clients')) {
                             if (!audience) audience = ans;
                         }
                         // SCOPE category → Requirements (features, integrations, technical details)
@@ -505,26 +505,51 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
 
                     // Add context (always included)
                     xmlSections.push('<context>');
-                    let contextText = '';
-                    if (purpose && audience) {
-                        contextText = `Building a ${purpose} for ${audience}.`;
-                    } else if (purpose) {
-                        contextText = `Building a ${purpose}.`;
-                    } else if (audience) {
-                        contextText = `Developing a solution for ${audience}.`;
-                    } else if (prompt && prompt.trim()) {
-                        // Use original prompt as context fallback
-                        contextText = prompt;
-                    } else {
-                        contextText = 'Building a custom solution based on the specified requirements.';
+                    const contextParts = [];
+
+                    if (audience) {
+                        contextParts.push(`Target audience: ${audience}`);
                     }
-                    xmlSections.push(contextText);
+                    if (purpose) {
+                        contextParts.push(`Purpose: ${purpose}`);
+                    }
+
+                    // Fallback if no context available
+                    if (contextParts.length === 0 && prompt && prompt.trim()) {
+                        contextParts.push(prompt);
+                    } else if (contextParts.length === 0) {
+                        contextParts.push('Building a custom solution based on the specified requirements.');
+                    }
+
+                    xmlSections.push(contextParts.join('\n'));
                     xmlSections.push('</context>');
                     xmlSections.push('');
 
                     // Add task (always included)
                     xmlSections.push('<task>');
-                    xmlSections.push(opening);
+
+                    // Build actionable task description
+                    let taskText = '';
+                    if (purpose) {
+                        taskText = `Build a ${purpose}`;
+
+                        // Add key features if available
+                        if (features.length > 0) {
+                            const topFeatures = features.slice(0, 3); // First 3 features
+                            taskText += ` with ${topFeatures.join(', ')}`;
+                        }
+
+                        if (audience) {
+                            taskText += ` for ${audience}`;
+                        }
+
+                        taskText += '.';
+                    } else {
+                        // Use opening as fallback
+                        taskText = opening;
+                    }
+
+                    xmlSections.push(taskText);
                     xmlSections.push('</task>');
                     xmlSections.push('');
 
