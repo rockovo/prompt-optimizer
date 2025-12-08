@@ -388,7 +388,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     // Categorize answers using Sonnet's category tags
                     let purpose = null, audience = null;
                     const features = [], data = [], auth = [], integrations = [];
-                    const timeline = [], budget = [], techStack = [], deliverable = [], exclusions = [];
+                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [];
 
                     // Process and filter answers to exclude unhelpful responses
                     function processAnswer(answer) {
@@ -425,6 +425,21 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         else if (q.includes('audience') || q.includes('who will use') || q.includes('who are the users') || q.includes('who is the target') || q.includes('users') || q.includes('target audience') || q.includes('customers') || q.includes('clients')) {
                             if (!audience) audience = ans;
                         }
+                        // Check for SKILL LEVEL third (regardless of category) - BEFORE budget to avoid conflicts
+                        else if (q.includes('skill level') || q.includes('technical background') || q.includes('who will build') || q.includes('who is building') || q.includes('who will maintain') || q.includes('experience level') || q.includes('yourself') || q.includes('developer') || q.includes('technical capabilities')) {
+                            const processed = processAnswer(ans);
+                            if (processed) skillLevel.push(processed);
+                        }
+                        // Check for TIMELINE fourth (regardless of category)
+                        else if (q.includes('timeline') || q.includes('deadline') || q.includes('when') || q.includes('time frame') || q.includes('how soon') || q.includes('how long') || q.includes('launch date')) {
+                            const processed = processAnswer(ans);
+                            if (processed) timeline.push(processed);
+                        }
+                        // Check for BUDGET fifth (regardless of category)
+                        else if (q.includes('budget') || q.includes('cost') || q.includes('price') || q.includes('spend') || q.includes('afford')) {
+                            const processed = processAnswer(ans);
+                            if (processed) budget.push(processed);
+                        }
                         // SCOPE category → Requirements (features, integrations, technical details)
                         else if (category === 'scope') {
                             // Check for specific subcategories
@@ -449,21 +464,13 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                                 if (processed) features.push(processed);
                             }
                         }
-                        // CONTEXT category → Constraints & Technical Context
+                        // CONTEXT category → Technical Context only (constraints handled above)
                         else if (category === 'context') {
-                            if (q.includes('timeline') || q.includes('deadline') || q.includes('when') || q.includes('how long')) {
-                                const processed = processAnswer(ans);
-                                if (processed) timeline.push(processed);
-                            } else if (q.includes('budget') || q.includes('cost') || q.includes('price') || q.includes('spend')) {
-                                const processed = processAnswer(ans);
-                                if (processed) budget.push(processed);
-                            } else if (q.includes('technology') || q.includes('framework') || q.includes('language') || q.includes('stack') || q.includes('built with') || q.includes('skill level') || q.includes('experience') || q.includes('who is building')) {
+                            if (q.includes('technology') || q.includes('framework') || q.includes('language') || q.includes('stack') || q.includes('built with')) {
                                 const processed = processAnswer(ans);
                                 if (processed) techStack.push(processed);
                             } else {
-                                // Other context questions go to constraints
-                                const processed = processAnswer(ans);
-                                if (processed) budget.push(processed);
+                                // Other context questions - no default routing
                             }
                         }
                         // SAFETY, COMPLETENESS, CLARITY, or GENERAL → Use keyword fallback
@@ -568,7 +575,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     }
 
                     // Add constraints section (only if content exists)
-                    const constraints = [...timeline, ...budget];
+                    const constraints = [...timeline, ...budget, ...skillLevel];
                     if (constraints.length > 0) {
                         xmlSections.push('<constraints>');
                         if (timeline.length > 0) {
@@ -576,6 +583,9 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         }
                         if (budget.length > 0) {
                             xmlSections.push('- Budget: ' + budget.join(', '));
+                        }
+                        if (skillLevel.length > 0) {
+                            xmlSections.push('- Skill level: ' + skillLevel.join(', '));
                         }
                         xmlSections.push('</constraints>');
                         xmlSections.push('');
