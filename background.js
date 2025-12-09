@@ -269,6 +269,7 @@ Identify what's missing by considering these areas (but don't ask about all — 
 - Context: Who is this for? Why does it matter? What's the background or motivation?
 - Scope: What specifically needs to be done? What are the actual requirements?
 - Constraints: What should be avoided? What are the limitations (time, budget, technical)?
+- Implementation: (For coding tasks) Are there specific patterns, libraries, or approaches to use or avoid?
 
 QUESTION GENERATION RULES:
 1. Generate 2-4 questions maximum (focus on highest impact gaps)
@@ -306,7 +307,7 @@ Return JSON in this EXACT structure:
       "question": "Your question (ONE thing only)",
       "explanation": "Why this matters for implementation",
       "example": "Option 1 | Option 2 | Option 3 | Option 4",
-      "category": "clarity|scope|context",
+      "category": "clarity|scope|context|implementation",
       "suggestions": [
         {
           "option": "Specific choice",
@@ -388,7 +389,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     // Categorize answers using Sonnet's category tags
                     let purpose = null, audience = null;
                     const features = [], data = [], auth = [], integrations = [];
-                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [];
+                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [], implementation = [];
 
                     // Process and filter answers to exclude unhelpful responses
                     function processAnswer(answer) {
@@ -439,6 +440,11 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         else if (q.includes('budget') || q.includes('cost') || q.includes('price') || q.includes('spend') || q.includes('afford')) {
                             const processed = processAnswer(ans);
                             if (processed) budget.push(processed);
+                        }
+                        // Check for IMPLEMENTATION sixth (regardless of category)
+                        else if (q.includes('approach') || q.includes('pattern') || q.includes('avoid') || q.includes('don\'t use') || q.includes('prefer') || q.includes('library') || q.includes('framework preference') || q.includes('technical constraint') || q.includes('limitation')) {
+                            const processed = processAnswer(ans);
+                            if (processed) implementation.push(processed);
                         }
                         // SCOPE category → Requirements (features, integrations, technical details)
                         else if (category === 'scope') {
@@ -571,6 +577,15 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                             items.forEach(item => xmlSections.push('- ' + item));
                         });
                         xmlSections.push('</requirements>');
+                        xmlSections.push('');
+                    }
+
+                    // Add implementation section (only if content exists)
+                    if (implementation.length > 0) {
+                        xmlSections.push('<implementation>');
+                        xmlSections.push('Approach and constraints:');
+                        implementation.forEach(item => xmlSections.push('- ' + item));
+                        xmlSections.push('</implementation>');
                         xmlSections.push('');
                     }
 
