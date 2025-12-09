@@ -185,7 +185,7 @@ async function callAnthropic(model, apiKey, systemPrompt, userMessage) {
         },
         body: JSON.stringify({
             model: model,
-            max_tokens: 4096,
+            max_tokens: 8192,
             messages: [{
                 role: 'user',
                 content: userMessage
@@ -270,6 +270,7 @@ Identify what's missing by considering these areas (but don't ask about all — 
 - Scope: What specifically needs to be done? What are the actual requirements?
 - Constraints: What should be avoided? What are the limitations (time, budget, technical)?
 - Implementation: (For coding tasks) Are there specific patterns, libraries, or approaches to use or avoid?
+- Verification: (For coding tasks) How should the solution be verified? What must work?
 
 QUESTION GENERATION RULES:
 1. Generate 2-4 questions maximum (focus on highest impact gaps)
@@ -307,7 +308,7 @@ Return JSON in this EXACT structure:
       "question": "Your question (ONE thing only)",
       "explanation": "Why this matters for implementation",
       "example": "Option 1 | Option 2 | Option 3 | Option 4",
-      "category": "clarity|scope|context|implementation",
+      "category": "clarity|scope|context|implementation|verification",
       "suggestions": [
         {
           "option": "Specific choice",
@@ -345,7 +346,8 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
 
     // Check if response was truncated
     if (providerResponse.stopReason === 'max_tokens') {
-        console.warn('[Background Script] Response was truncated due to max_tokens limit');
+        console.error('[Background Script] Response truncated - max_tokens limit reached');
+        throw new Error('AI response was truncated. Please try with a simpler prompt or fewer questions.');
     }
 
     if (providerResponse.content) {
@@ -389,7 +391,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     // Categorize answers using Sonnet's category tags
                     let purpose = null, audience = null;
                     const features = [], data = [], auth = [], integrations = [];
-                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [], implementation = [];
+                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [], implementation = [], verification = [];
 
                     // Process and filter answers to exclude unhelpful responses
                     function processAnswer(answer) {
@@ -445,6 +447,11 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         else if (q.includes('approach') || q.includes('pattern') || q.includes('avoid') || q.includes('don\'t use') || q.includes('prefer') || q.includes('library') || q.includes('framework preference') || q.includes('technical constraint') || q.includes('limitation')) {
                             const processed = processAnswer(ans);
                             if (processed) implementation.push(processed);
+                        }
+                        // Check for VERIFICATION seventh (regardless of category)
+                        else if (q.includes('verify') || q.includes('test') || q.includes('confirm') || q.includes('check') || q.includes('validate') || q.includes('ensure') || q.includes('must work') || q.includes('should work') || q.includes('test case') || q.includes('scenario')) {
+                            const processed = processAnswer(ans);
+                            if (processed) verification.push(processed);
                         }
                         // SCOPE category → Requirements (features, integrations, technical details)
                         else if (category === 'scope') {
@@ -505,7 +512,8 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         opening += '.';
                     } else {
                         // Use first sentence from original prompt as fallback
-                        if (prompt && prompt.trim()) {
+                        // Skip if prompt contains XML (safety net for corrupted state)
+                        if (prompt && prompt.trim() && !prompt.trim().startsWith('<')) {
                             const firstSentence = prompt.split('.')[0];
                             opening = firstSentence + '.';
                         } else {
@@ -586,6 +594,15 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         xmlSections.push('Approach and constraints:');
                         implementation.forEach(item => xmlSections.push('- ' + item));
                         xmlSections.push('</implementation>');
+                        xmlSections.push('');
+                    }
+
+                    // Add verification section (only if content exists)
+                    if (verification.length > 0) {
+                        xmlSections.push('<verification>');
+                        xmlSections.push('Before declaring complete, verify:');
+                        verification.forEach(item => xmlSections.push('- [ ] ' + item));
+                        xmlSections.push('</verification>');
                         xmlSections.push('');
                     }
 

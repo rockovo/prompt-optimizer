@@ -33,6 +33,7 @@ const modalConfirm = document.getElementById('modalConfirm');
 
 let apiKey = null;
 let currentPrompt = '';
+let originalPrompt = '';  // Immutable original user prompt for synthesis
 let currentAnalysis = null;
 let userAnswers = {}; // Current round answers (keyed by question ID)
 let answerHistory = {}; // Accumulated answers across all rounds (keyed by question text)
@@ -127,6 +128,7 @@ analyzeBtn.addEventListener('click', async () => {
 
     // Reset state for new analysis
     currentPrompt = prompt;
+    originalPrompt = prompt;  // Store immutable original for synthesis
     userAnswers = {};
     answerHistory = {}; // Clear accumulated history for fresh start
     expandedCards = {};
@@ -214,7 +216,7 @@ regenerateBtn.addEventListener('click', async () => {
                 });
 
                 // Send accumulated history to API
-                await analyzePrompt(currentPrompt, answerHistory);
+                await analyzePrompt(originalPrompt, answerHistory);
             }
         );
         return;
@@ -232,7 +234,7 @@ regenerateBtn.addEventListener('click', async () => {
     });
 
     // Send accumulated history to API
-    await analyzePrompt(currentPrompt, answerHistory);
+    await analyzePrompt(originalPrompt, answerHistory);
 });
 
 // Generate Final Prompt button click handler
