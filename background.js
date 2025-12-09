@@ -271,6 +271,7 @@ Identify what's missing by considering these areas (but don't ask about all — 
 - Constraints: What should be avoided? What are the limitations (time, budget, technical)?
 - Implementation: (For coding tasks) Are there specific patterns, libraries, or approaches to use or avoid?
 - Verification: (For coding tasks) How should the solution be verified? What must work?
+- Success Criteria: What defines "done"? What are the measurable acceptance criteria?
 
 QUESTION GENERATION RULES:
 1. Generate 2-4 questions maximum (focus on highest impact gaps)
@@ -308,7 +309,7 @@ Return JSON in this EXACT structure:
       "question": "Your question (ONE thing only)",
       "explanation": "Why this matters for implementation",
       "example": "Option 1 | Option 2 | Option 3 | Option 4",
-      "category": "clarity|scope|context|implementation|verification",
+      "category": "clarity|scope|context|implementation|verification|success_criteria",
       "suggestions": [
         {
           "option": "Specific choice",
@@ -391,7 +392,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     // Categorize answers using Sonnet's category tags
                     let purpose = null, audience = null;
                     const features = [], data = [], auth = [], integrations = [];
-                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [], implementation = [], verification = [];
+                    const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [], implementation = [], verification = [], successCriteria = [];
 
                     // Process and filter answers to exclude unhelpful responses
                     function processAnswer(answer) {
@@ -452,6 +453,11 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         else if (q.includes('verify') || q.includes('test') || q.includes('confirm') || q.includes('check') || q.includes('validate') || q.includes('ensure') || q.includes('must work') || q.includes('should work') || q.includes('test case') || q.includes('scenario')) {
                             const processed = processAnswer(ans);
                             if (processed) verification.push(processed);
+                        }
+                        // Check for SUCCESS_CRITERIA eighth (regardless of category)
+                        else if (q.includes('done') || q.includes('complete') || q.includes('success') || q.includes('acceptance') || q.includes('criteria') || q.includes('definition of done') || q.includes('measure') || q.includes('metric') || q.includes('goal') || q.includes('outcome')) {
+                            const processed = processAnswer(ans);
+                            if (processed) successCriteria.push(processed);
                         }
                         // SCOPE category → Requirements (features, integrations, technical details)
                         else if (category === 'scope') {
@@ -603,6 +609,15 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         xmlSections.push('Before declaring complete, verify:');
                         verification.forEach(item => xmlSections.push('- [ ] ' + item));
                         xmlSections.push('</verification>');
+                        xmlSections.push('');
+                    }
+
+                    // Add success criteria section (only if content exists)
+                    if (successCriteria.length > 0) {
+                        xmlSections.push('<success_criteria>');
+                        xmlSections.push('Task is complete when:');
+                        successCriteria.forEach(item => xmlSections.push('- [ ] ' + item));
+                        xmlSections.push('</success_criteria>');
                         xmlSections.push('');
                     }
 
