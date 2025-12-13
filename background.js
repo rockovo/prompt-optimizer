@@ -273,6 +273,11 @@ Identify what's missing by considering these areas (but don't ask about all — 
 - Verification: (For coding tasks) How should the solution be verified? What must work?
 - Success Criteria: What defines "done"? What are the measurable acceptance criteria?
 
+For coding tasks, also ask about:
+- Which existing files should be examined for context? (Output as @path/file)
+- What commands need to be run to verify the solution? (Output as !command)
+- What new files need to be created or modified? (Output as ./path/file)
+
 QUESTION GENERATION RULES:
 1. Generate 2-4 questions maximum (focus on highest impact gaps)
 2. Prioritize by impact — most critical questions first
@@ -393,6 +398,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     let purpose = null, audience = null;
                     const features = [], data = [], auth = [], integrations = [];
                     const timeline = [], budget = [], skillLevel = [], techStack = [], deliverable = [], exclusions = [], implementation = [], verification = [], successCriteria = [];
+                    const filesToExamine = [], commandsToRun = [];
 
                     // Process and filter answers to exclude unhelpful responses
                     function processAnswer(answer) {
@@ -429,32 +435,42 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         else if (q.includes('audience') || q.includes('who will use') || q.includes('who are the users') || q.includes('who is the target') || q.includes('users') || q.includes('target audience') || q.includes('customers') || q.includes('clients')) {
                             if (!audience) audience = ans;
                         }
-                        // Check for SKILL LEVEL third (regardless of category) - BEFORE budget to avoid conflicts
+                        // Check for FILES_TO_EXAMINE third (regardless of category)
+                        else if (q.includes('examine') || q.includes('look at') || q.includes('check file') || q.includes('read file') || q.includes('existing file') || q.includes('@') || q.includes('src/') || q.includes('.ts') || q.includes('.js') || q.includes('.py') || q.includes('.java') || q.includes('.go')) {
+                            const processed = processAnswer(ans);
+                            if (processed) filesToExamine.push(processed);
+                        }
+                        // Check for COMMANDS_TO_RUN fourth (regardless of category)
+                        else if (q.includes('run') || q.includes('execute') || q.includes('command') || q.includes('npm') || q.includes('yarn') || q.includes('pip') || q.includes('cargo') || q.includes('!') || q.includes('test') || q.includes('build') || q.includes('start')) {
+                            const processed = processAnswer(ans);
+                            if (processed) commandsToRun.push(processed);
+                        }
+                        // Check for SKILL LEVEL fifth (regardless of category) - BEFORE budget to avoid conflicts
                         else if (q.includes('skill level') || q.includes('technical background') || q.includes('who will build') || q.includes('who is building') || q.includes('who will maintain') || q.includes('experience level') || q.includes('yourself') || q.includes('developer') || q.includes('technical capabilities')) {
                             const processed = processAnswer(ans);
                             if (processed) skillLevel.push(processed);
                         }
-                        // Check for TIMELINE fourth (regardless of category)
+                        // Check for TIMELINE sixth (regardless of category)
                         else if (q.includes('timeline') || q.includes('deadline') || q.includes('when') || q.includes('time frame') || q.includes('how soon') || q.includes('how long') || q.includes('launch date')) {
                             const processed = processAnswer(ans);
                             if (processed) timeline.push(processed);
                         }
-                        // Check for BUDGET fifth (regardless of category)
+                        // Check for BUDGET seventh (regardless of category)
                         else if (q.includes('budget') || q.includes('cost') || q.includes('price') || q.includes('spend') || q.includes('afford')) {
                             const processed = processAnswer(ans);
                             if (processed) budget.push(processed);
                         }
-                        // Check for IMPLEMENTATION sixth (regardless of category)
+                        // Check for IMPLEMENTATION eighth (regardless of category)
                         else if (q.includes('approach') || q.includes('pattern') || q.includes('avoid') || q.includes('don\'t use') || q.includes('prefer') || q.includes('library') || q.includes('framework preference') || q.includes('technical constraint') || q.includes('limitation')) {
                             const processed = processAnswer(ans);
                             if (processed) implementation.push(processed);
                         }
-                        // Check for VERIFICATION seventh (regardless of category)
+                        // Check for VERIFICATION ninth (regardless of category)
                         else if (q.includes('verify') || q.includes('test') || q.includes('confirm') || q.includes('check') || q.includes('validate') || q.includes('ensure') || q.includes('must work') || q.includes('should work') || q.includes('test case') || q.includes('scenario')) {
                             const processed = processAnswer(ans);
                             if (processed) verification.push(processed);
                         }
-                        // Check for SUCCESS_CRITERIA eighth (regardless of category)
+                        // Check for SUCCESS_CRITERIA tenth (regardless of category)
                         else if (q.includes('done') || q.includes('complete') || q.includes('success') || q.includes('acceptance') || q.includes('criteria') || q.includes('definition of done') || q.includes('measure') || q.includes('metric') || q.includes('goal') || q.includes('outcome')) {
                             const processed = processAnswer(ans);
                             if (processed) successCriteria.push(processed);
@@ -548,6 +564,15 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                         contextParts.push('Building a custom solution based on the specified requirements.');
                     }
 
+                    // Add files to examine if present
+                    if (filesToExamine.length > 0) {
+                        const files = filesToExamine.map(f => {
+                            // Add @ prefix if not already present
+                            return f.trim().startsWith('@') ? f.trim() : `@${f.trim()}`;
+                        }).join(', ');
+                        contextParts.push(`Examine ${files} to understand current implementation.`);
+                    }
+
                     xmlSections.push(contextParts.join('\n'));
                     xmlSections.push('</context>');
                     xmlSections.push('');
@@ -607,6 +632,16 @@ IMPORTANT: Return ONLY valid JSON, no additional text.`;
                     if (verification.length > 0) {
                         xmlSections.push('<verification>');
                         xmlSections.push('Before declaring complete, verify:');
+
+                        // Add commands to run first
+                        if (commandsToRun.length > 0) {
+                            commandsToRun.forEach(cmd => {
+                                const formatted = cmd.trim().startsWith('!') ? cmd.trim() : `!${cmd.trim()}`;
+                                xmlSections.push(`- [ ] Run ${formatted}`);
+                            });
+                        }
+
+                        // Then add general verification items
                         verification.forEach(item => xmlSections.push('- [ ] ' + item));
                         xmlSections.push('</verification>');
                         xmlSections.push('');
